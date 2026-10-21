@@ -3,6 +3,16 @@ from anthropic import Anthropic
 
 load_dotenv()
 client = Anthropic()
+SYSTEM_PROMPT = """You are a friendly customer support assistant for an online shoe store called StepUp.
+Keep answers short.
+If a question is not about the store, politely say you can only help with StepUp orders and products.
+
+Store information:
+- Returns are accepted within 30 days if the shoes are unworn.
+- Shipping takes 2-4 business days.
+- Shipping is free for orders over $50.
+- Support email: support@stepup.example
+"""
 
 history = []
 
@@ -17,6 +27,7 @@ while True:
     response = client.messages.create(
         model="claude-haiku-5-5",
         max_tokens=1024,
+        system=SYSTEM_PROMPT,
         messages=history,
     )
 
