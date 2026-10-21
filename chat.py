@@ -1,8 +1,9 @@
 from dotenv import load_dotenv
-from anthropic import Anthropic
+from anthropic import Anthropic, APIConnectionError, APIStatusError
 
 load_dotenv()
 client = Anthropic()
+
 SYSTEM_PROMPT = """You are a friendly customer support assistant for an online shoe store called StepUp.
 Keep answers short.
 If a question is not about the store, politely say you can only help with StepUp orders and products.
@@ -24,12 +25,21 @@ while True:
 
     history.append({"role": "user", "content": user_text})
 
-    response = client.messages.create(
-        model="claude-haiku-5-5",
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=history,
-    )
+    try:
+        response = client.messages.create(
+            model="claude-haiku-5-5",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=history,
+        )
+    except APIConnectionError:
+        print("Claude: Connection problem. Please try again.")
+        history.pop()
+        continue
+    except APIStatusError as e:
+        print(f"Claude: Something went wrong ({e.status_code}). Please try again.")
+        history.pop()
+        continue
 
     reply = ""
     for block in response.content:
