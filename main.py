@@ -7,12 +7,15 @@ client = Anthropic()
 try:
     response = client.messages.create(
         model="claude-haiku-5-5",
-        max_tokens=200,
+        max_tokens=1024,
         messages=[
-            {"role": "user", "content": "Hello! Introduce yourself in one sentence."}
+            {"role": "user", "content": "Hello! Introduce yourself in one sentence."},
+            {"role": "user", "content": "What is the radius of the Earth?"}
         ],
     )
-    print(response.content[0].text)
+    for block in response.content:
+        if block.type == "text":
+            print(block.text)
 except APIConnectionError:
     print("Could not connect to the API. Check your internet connection.")
 except APIStatusError as e:
