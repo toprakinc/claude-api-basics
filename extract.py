@@ -1,4 +1,5 @@
 import os
+import csv
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from pydantic import BaseModel, ValidationError
@@ -58,6 +59,8 @@ Invoice:
         return None
 
 
+rows = []
+
 for filename in sorted(os.listdir("invoices")):
     if not filename.endswith(".txt"):
         continue
@@ -68,12 +71,31 @@ for filename in sorted(os.listdir("invoices")):
 
     invoice = extract_invoice(invoice_text)
     if invoice is None:
+        rows.append({"file": filename, "vendor": "", "total": "", "currency": "", "calculated": "", "status": "FAILED"})
         continue
 
     calculated = sum(item.quantity * item.unit_price for item in invoice.items)
+    if abs(calculated - invoice.total) > 0.01:
+        status = "WARNING"
+    else:
+        status = "OK"
+
     print(f"  Vendor: {invoice.vendor}")
     print(f"  Total: {invoice.total} {invoice.currency} | Calculated: {calculated:.2f}")
-    if abs(calculated - invoice.total) > 0.01:
-        print("  WARNING: total does not match line items!")
-    else:
-        print("  OK")
+    print(f"  {status}")
+
+    rows.append({
+        "file": filename,
+        "vendor": invoice.vendor,
+        "total": invoice.total,
+        "currency": invoice.currency,
+        "calculated": round(calculated, 2),
+        "status": status,
+    })
+
+with open("results.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=["file", "vendor", "total", "currency", "calculated", "status"])
+    writer.writeheader()
+    writer.writerows(rows)
+
+print("\nSaved results.csv")
