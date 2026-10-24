@@ -22,7 +22,7 @@ ACME LTD - Invoice #4471
 Date: 03/10/2026
 2x Office chair ..... 150 EUR
 1x Desk ............. 89.90 EUR
-TOTAL DUE: 389.90 EUR
+TOTAL DUE: 429.90 EUR
 """
 
 prompt = f"""Extract data from this invoice.
@@ -32,7 +32,7 @@ Invoice:
 
 response = client.messages.create(
     model="claude-haiku-5-5",
-    max_tokens=500,
+    max_tokens=2000,
     messages=[{"role": "user", "content": prompt}],
 )
 
@@ -40,7 +40,9 @@ raw = ""
 for block in response.content:
     if block.type == "text":
         raw += block.text
-
+print("Stop reason:", response.stop_reason)
+if response.stop_reason == "max_tokens":
+    print("ERROR: reply was cut off, increase max_tokens")
 print("Raw reply:", raw)
 raw = raw.strip()
 if raw.startswith("```"):
