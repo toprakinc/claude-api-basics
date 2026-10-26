@@ -59,43 +59,60 @@ Invoice:
         return None
 
 
-rows = []
+if __name__ == "__main__":
+    rows = []
 
-for filename in sorted(os.listdir("invoices")):
-    if not filename.endswith(".txt"):
-        continue
+    for filename in sorted(os.listdir("invoices")):
+        if not filename.endswith(".txt"):
+            continue
 
-    print(f"\n=== {filename} ===")
-    with open(os.path.join("invoices", filename)) as f:
-        invoice_text = f.read()
+        print(f"\n=== {filename} ===")
+        with open(os.path.join("invoices", filename)) as f:
+            invoice_text = f.read()
 
-    invoice = extract_invoice(invoice_text)
-    if invoice is None:
-        rows.append({"file": filename, "vendor": "", "total": "", "currency": "", "calculated": "", "status": "FAILED"})
-        continue
+        invoice = extract_invoice(invoice_text)
+        if invoice is None:
+            rows.append(
+                {
+                    "file": filename,
+                    "vendor": "",
+                    "total": "",
+                    "currency": "",
+                    "calculated": "",
+                    "status": "FAILED",
+                }
+            )
+            continue
 
-    calculated = sum(item.quantity * item.unit_price for item in invoice.items)
-    if abs(calculated - invoice.total) > 0.01:
-        status = "WARNING"
-    else:
-        status = "OK"
+        calculated = sum(item.quantity * item.unit_price for item in invoice.items)
+        if abs(calculated - invoice.total) > 0.01:
+            status = "WARNING"
+        else:
+            status = "OK"
 
-    print(f"  Vendor: {invoice.vendor}")
-    print(f"  Total: {invoice.total} {invoice.currency} | Calculated: {calculated:.2f}")
-    print(f"  {status}")
+        print(f"  Vendor: {invoice.vendor}")
+        print(
+            f"  Total: {invoice.total} {invoice.currency} | Calculated: {calculated:.2f}"
+        )
+        print(f"  {status}")
 
-    rows.append({
-        "file": filename,
-        "vendor": invoice.vendor,
-        "total": invoice.total,
-        "currency": invoice.currency,
-        "calculated": round(calculated, 2),
-        "status": status,
-    })
+        rows.append(
+            {
+                "file": filename,
+                "vendor": invoice.vendor,
+                "total": invoice.total,
+                "currency": invoice.currency,
+                "calculated": round(calculated, 2),
+                "status": status,
+            }
+        )
 
-with open("results.csv", "w", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=["file", "vendor", "total", "currency", "calculated", "status"])
-    writer.writeheader()
-    writer.writerows(rows)
+    with open("results.csv", "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["file", "vendor", "total", "currency", "calculated", "status"],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
 
-print("\nSaved results.csv")
+    print("\nSaved results.csv")
