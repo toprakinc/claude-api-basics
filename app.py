@@ -1,4 +1,4 @@
-from fastapi import FastAPI  # import the FastAPI class
+from fastapi import FastAPI, HTTPException  # import the FastAPI class
 from pydantic import BaseModel
 from extract import extract_invoice
 
@@ -22,6 +22,8 @@ def health():
 @app.post("/extract")
 def extract(data: InvoiceText):
     result = extract_invoice(data.text)
+    # Return a real error status so client code can detect the failure
     if result is None:
-        return {"error": "Could not extract invoice data"}
+        raise HTTPException(status_code=422, detail="Could not extract invoice data")
+    # FastAPI converts the Pydantic Invoice model to JSON automatically
     return result
