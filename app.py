@@ -1,5 +1,6 @@
 from fastapi import FastAPI  # import the FastAPI class
 from pydantic import BaseModel
+from extract import extract_invoice
 
 app = FastAPI()  # create the web app
 
@@ -20,4 +21,7 @@ def health():
 
 @app.post("/extract")
 def extract(data: InvoiceText):
-    return {"characters": len(data.text)}
+    result = extract_invoice(data.text)
+    if result is None:
+        return {"error": "Could not extract invoice data"}
+    return result
