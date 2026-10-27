@@ -3,43 +3,13 @@ import json
 from dotenv import load_dotenv
 from anthropic import Anthropic
 
+# Minimal tool calling example: one question, one tool call, one answer
+from store_tools import TOOLS, get_order_status
+
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 MODEL = "claude-haiku-5-5"
-
-# Fake order database (a real project would query a database or the store's API)
-ORDERS = {
-    "1001": {"status": "shipped", "carrier": "UPS", "eta": "2026-10-29"},
-    "1002": {"status": "processing", "carrier": None, "eta": None},
-}
-
-
-def get_order_status(order_id):
-    """Return the order details, or an error if the order doesn't exist."""
-    order = ORDERS.get(order_id)
-    if order is None:
-        return {"error": f"Order {order_id} not found"}
-    return order
-
-
-# Describe the tool so Claude knows what it does and what input it needs
-TOOLS = [
-    {
-        "name": "get_order_status",
-        "description": "Look up the current status of a customer's order by its order ID.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "order_id": {
-                    "type": "string",
-                    "description": "The order ID, for example '1001'",
-                }
-            },
-            "required": ["order_id"],
-        },
-    }
-]
 
 messages = [{"role": "user", "content": "Where is my order 1001?"}]
 
