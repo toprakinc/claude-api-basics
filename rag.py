@@ -1,4 +1,10 @@
 from pypdf import PdfReader
+from anthropic import Anthropic
+from dotenv import load_dotenv
+
+load_dotenv()
+client = Anthropic()
+MODEL = "claude-haiku-5-5"
 
 
 def load_pdf_text(path):
@@ -59,13 +65,34 @@ def search_chunks(question, chunks, k=3):
     return results
 
 
+def answer_question(question, chunks):
+    top_chunks = search_chunks(question, chunks)
+
+    # Join the chunks into one text, with a blank line between them
+    context = "\n\n".join(top_chunks)
+    prompt = f"""Answer the customer's question using only the documents below.
+If the answer is not in the documents, say "I don't know".
+
+Documents:
+{context}
+
+Question: {question}"""
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    reply = ""
+    for block in response.content:
+        if block.type == "text":
+            reply += block.text
+    return reply
+
+
 if __name__ == "__main__":
     text = load_pdf_text("help_center.pdf")
     chunks = chunk_text(text)
-
-
-question = "How many days do I have to return shoes?"
-results = search_chunks(question, chunks)
-for chunk in results:
+    print(answer_question("How many days do I have to return shoes?", chunks))
     print("---")
-    print(chunk)
+    print(answer_question("Do you sell watches?", chunks))
