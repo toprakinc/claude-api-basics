@@ -24,11 +24,31 @@ def chunk_text(text, chunk_size=80, overlap=20):
     return chunks
 
 
+def search_chunks(question, chunks, k=3):
+    """Return the k chunks that share the most words with the question."""
+    question_words = question.lower().split()
+    scored = []
+    for chunk in chunks:
+        chunk_words = chunk.lower().split()
+        score = 0
+        for word in question_words:
+            if word in chunk_words:
+                score += 1
+        scored.append((score, chunk))
+    scored = sorted(scored, reverse=True)
+    results = []
+    for score, chunk in scored[:k]:
+        results.append(chunk)
+    return results
+
+
 if __name__ == "__main__":
     text = load_pdf_text("help_center.pdf")
     chunks = chunk_text(text)
-    print(len(chunks))
-    print(chunks[0])
 
-print("End of chunk 0:  ", chunks[0].split()[-20:])
-print("Start of chunk 1:", chunks[1].split()[:20])
+
+question = "How many days do I have to return shoes?"
+results = search_chunks(question, chunks)
+for chunk in results:
+    print("---")
+    print(chunk)
