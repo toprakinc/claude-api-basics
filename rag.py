@@ -29,3 +29,6 @@ if __name__ == "__main__":
     chunks = chunk_text(text)
     print(len(chunks))
     print(chunks[0])
+
+print("End of chunk 0:  ", chunks[0].split()[-20:])
+print("Start of chunk 1:", chunks[1].split()[:20])
