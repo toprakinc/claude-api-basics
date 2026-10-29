@@ -26,10 +26,27 @@ def chunk_text(text, chunk_size=80, overlap=20):
 
 def search_chunks(question, chunks, k=3):
     """Return the k chunks that share the most words with the question."""
-    question_words = question.lower().split()
+    question_words = (
+        # Remove punctuation so "shoes?" matches "shoes"
+        question.lower()
+        .replace("?", "")
+        .replace(".", "")
+        .replace(",", "")
+        .replace(";", "")
+        .split()
+    )
+
     scored = []
     for chunk in chunks:
-        chunk_words = chunk.lower().split()
+        # Remove punctuation so "shoes?" matches "shoes"
+        chunk_words = (
+            chunk.lower()
+            .replace("?", "")
+            .replace(".", "")
+            .replace(",", "")
+            .replace(";", "")
+            .split()
+        )
         score = 0
         for word in question_words:
             if word in chunk_words:
