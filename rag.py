@@ -1,9 +1,12 @@
 from pypdf import PdfReader
 from anthropic import Anthropic
 from dotenv import load_dotenv
+import voyageai
 
 load_dotenv()
 client = Anthropic()
+vo = voyageai.Client()
+EMBED_MODEL = "voyage-3.5-lite"
 MODEL = "claude-haiku-5-5"
 
 
@@ -41,10 +44,8 @@ def search_chunks(question, chunks, k=3):
         .replace(";", "")
         .split()
     )
-
     scored = []
     for chunk in chunks:
-        # Remove punctuation so "shoes?" matches "shoes"
         chunk_words = (
             chunk.lower()
             .replace("?", "")
@@ -65,6 +66,28 @@ def search_chunks(question, chunks, k=3):
     return results
 
 
+def embed_chunks(chunks):
+    """Turn every chunk into a vector. Done once, up front."""
+    result = vo.embed(chunks, model=EMBED_MODEL, input_type="document")
+    return result.embeddings
+
+
+def embed_query(question):
+    """Turn the customer's question into a vector."""
+    result = vo.embed([question], model=EMBED_MODEL, input_type="query")
+    return result.embeddings[0]
+
+
+def similarity(a, b):
+    """Dot product: how close two vectors are. Higher means more similar meaning."""
+    score = 0
+    for i in range(len(a)):
+        # Multiply numbers at the same position and add them up
+        score += a[i] * b[i]
+
+    return score
+
+
 def answer_question(question, chunks):
     top_chunks = search_chunks(question, chunks)
 
@@ -83,7 +106,7 @@ Question: {question}"""
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
-    reply = ""
+
     for block in response.content:
         if block.type == "text":
             reply += block.text
