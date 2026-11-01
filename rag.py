@@ -9,6 +9,16 @@ vo = voyageai.Client()
 EMBED_MODEL = "voyage-3.5-lite"
 MODEL = "claude-haiku-5-5"
 
+HEADINGS = [
+    "Shipping",
+    "Returns and Refunds",
+    "Exchanges",
+    "Size Guide",
+    "Payment",
+    "Shoe Care",
+    "Contact",
+]
+
 
 def load_pdf_text(path):
     """Read every page of a PDF and return all text as one string."""
@@ -30,6 +40,21 @@ def chunk_text(text, chunk_size=80, overlap=20):
         # Stop once this chunk reaches the end, so we don't make a tiny leftover chunk
         if start + chunk_size >= len(words):
             break
+    return chunks
+
+
+def chunk_by_headings(text, headings):
+    """Split text into one chunk per section, cutting at each heading."""
+    chunks = []
+    for i in range(len(headings)):
+        start = text.find(headings[i])
+        # Each section ends where the next heading starts; the last one runs to the end
+        if i + 1 < len(headings):
+            end = text.find(headings[i + 1])
+        else:
+            end = len(text)
+            # Collapse line breaks and extra spaces into single spaces
+        chunks.append(" ".join(text[start:end].split()))
     return chunks
 
 
@@ -140,7 +165,7 @@ Question: {question}"""
 
 if __name__ == "__main__":
     text = load_pdf_text("help_center.pdf")
-    chunks = chunk_text(text)
-    print(answer_question("How many days do I have to return shoes?", chunks))
-    print("---")
-    print(answer_question("Do you sell watches?", chunks))
+    chunks = chunk_by_headings(text, HEADINGS)
+    for chunk in chunks:
+        print("---")
+        print(chunk)

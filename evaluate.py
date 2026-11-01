@@ -1,6 +1,7 @@
 from eval_set import EVAL_SET
 from rag import (
-    chunk_text,
+    HEADINGS,
+    chunk_by_headings,
     embed_chunks,
     embed_queries,
     load_pdf_text,
@@ -9,7 +10,7 @@ from rag import (
 )
 
 text = load_pdf_text("help_center.pdf")
-chunks = chunk_text(text)
+chunks = chunk_by_headings(text, HEADINGS)
 # Embed all chunks once (request 1)
 chunk_vectors = embed_chunks(chunks)
 
