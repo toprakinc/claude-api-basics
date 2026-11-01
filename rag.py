@@ -78,14 +78,39 @@ def embed_query(question):
     return result.embeddings[0]
 
 
+def embed_queries(questions):
+    """Turn many questions into vectors with a single request."""
+    result = vo.embed(questions, model=EMBED_MODEL, input_type="query")
+    return result.embeddings
+
+
 def similarity(a, b):
     """Dot product: how close two vectors are. Higher means more similar meaning."""
     score = 0
     for i in range(len(a)):
         # Multiply numbers at the same position and add them up
         score += a[i] * b[i]
-
     return score
+
+
+def search_by_vector(question_vector, chunks, chunk_vectors, k=3):
+    """Return the k chunks closest to an already-embedded question."""
+    scored = []
+    for chunk, vector in zip(chunks, chunk_vectors):
+        # Compare the question with this one chunk
+        score = similarity(question_vector, vector)
+        scored.append((score, chunk))
+    scored = sorted(scored, reverse=True)
+    results = []
+    for score, chunk in scored[:k]:
+        results.append(chunk)
+    return results
+
+
+def search_chunks_semantic(question, chunks, chunk_vectors, k=3):
+    """Return the k chunks whose meaning is closest to the question."""
+    question_vector = embed_query(question)
+    return search_by_vector(question_vector, chunks, chunk_vectors, k)
 
 
 def answer_question(question, chunks):
@@ -106,7 +131,7 @@ Question: {question}"""
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
-
+    reply = ""
     for block in response.content:
         if block.type == "text":
             reply += block.text
