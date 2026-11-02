@@ -1,118 +1,110 @@
 # Claude API Basics
 
-Learning project: building practical tools on top of the Claude API in Python, from a terminal chatbot to a tool-using support bot and an invoice extraction API.
+Learning project: building practical AI tools on top of the Claude API in Python, from a terminal chatbot to a tool-using support bot that answers from a company's PDF help center.
+
+## Projects
+
+### 1. StepUp support bot (tool calling + RAG)
+
+A customer support chatbot for a fictional shoe store, **StepUp**. It can:
+
+- look up order status (`get_order_status`)
+- create returns, with business rules enforced in code (`create_return_request`)
+- answer store policy questions from a PDF help center (`search_docs`)
+
+### 2. Help center RAG with evaluation
+
+Answers questions using only the company's PDF documents and says "I don't know" when the answer isn't there. Search quality is measured with a 15-question test set.
+
+### 3. Invoice extractor (structured output + FastAPI)
+
+Extracts vendor, total, currency and line items from invoice text, validates them with Pydantic and exposes the extractor as an HTTP API.
 
 ## Files
 
-- `main.py` – Sends a single message to Claude and prints the reply. Handles connection and API errors.
-- `chat.py` – Customer support chatbot for a fictional shoe store, **StepUp**. Remembers the conversation and uses tools to look up orders and create returns.
-- `store_tools.py` – The store's tools: a fake order database, tool definitions for Claude, and the functions that run them.
-- `support_tools.py` – Minimal tool calling example: one question, one tool call, one answer.
-- `extract.py` – Extracts structured data (vendor, total, currency, line items) from invoice text and validates it with Pydantic. Processes every `.txt` file in `invoices/` and saves a summary to `results.csv`.
-- `app.py` – FastAPI web service that exposes the invoice extractor as an HTTP API.
+| File               | What it does                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `chat.py`          | StepUp support bot. Keeps conversation history, runs a tool loop until Claude writes the final answer.                         |
+| `store_tools.py`   | The bot's tools: fake order database, tool definitions and the functions that run them. Loads the help center once at startup. |
+| `rag.py`           | RAG pipeline: read PDF, split into sections, embed with Voyage AI, search by meaning, answer with Claude.                      |
+| `eval_set.py`      | 15 test questions with the exact phrase each answer must contain.                                                              |
+| `evaluate.py`      | Runs the test set and compares keyword search vs semantic search.                                                              |
+| `help_center.pdf`  | StepUp help center: shipping, returns, exchanges, sizing, payment, shoe care, contact.                                         |
+| `extract.py`       | Invoice extraction with Pydantic validation; processes every `.txt` in `invoices/` and saves `results.csv`.                    |
+| `app.py`           | FastAPI service exposing the invoice extractor.                                                                                |
+| `main.py`          | Minimal example: one message to Claude, with error handling.                                                                   |
+| `support_tools.py` | Minimal tool calling example: one question, one tool call, one answer.                                                         |
 
-## How `chat.py` works
+## How the RAG pipeline works
 
-- Keeps the conversation in a `history` list and sends it with every request, so the bot remembers earlier messages.
-- Uses a `SYSTEM_PROMPT` to define the bot's role, store policies and how to handle returns.
-- Gives Claude two tools:
-  - `get_order_status` – looks up an order's status, carrier and delivery date.
-  - `create_return_request` – creates a return for a delivered order.
-- Runs a tool loop: while Claude asks for tools, the code runs them and sends the results back, until Claude writes the final answer.
-- If a request fails, everything added during that turn is removed from `history`, so the conversation stays valid.
+1. **Read** the PDF with `pypdf`.
+2. **Split** it into one chunk per section, cutting at each heading (`chunk_by_headings`).
+3. **Embed** every chunk once with Voyage AI (`voyage-3.5-lite`), turning text into vectors that represent meaning.
+4. **Search:** embed the question, score each chunk with a dot product (`similarity`) and take the closest chunks.
+5. **Answer:** send only those chunks to Claude with one rule: answer from the documents, or say "I don't know".
 
-### Safety: rules in the prompt and in the code
+## Measuring search quality
 
-- **Prompt:** the bot must summarize a return and get the customer's explicit "yes" before creating it.
-- **Code:** `create_return_request` checks the business rules itself (order exists, is delivered, is within 30 days, no duplicate return). Even if the model is persuaded to call the tool, invalid returns are rejected.
+`evaluate.py` asks 15 questions and checks whether the top chunk (k=1) contains the expected answer. Half of the questions use different words than the document (for example _"Can I send back sneakers I already wore?"_ vs _"Returns are accepted... Shoes must be unworn."_).
 
-### Example
+| Chunking                | Search                 | Score     |
+| ----------------------- | ---------------------- | --------- |
+| 80-word chunks          | Keyword (shared words) | 8/15      |
+| 80-word chunks          | Semantic (embeddings)  | 12/15     |
+| Sections by heading     | Keyword                | 9/15      |
+| **Sections by heading** | **Semantic**           | **14/15** |
+
+What this showed:
+
+- Keyword search fails when customers use different words than the document.
+- Fixed-size chunks mixed several topics in one chunk, which blurred their embeddings. Splitting by headings (one topic per chunk) fixed most of the remaining misses.
+
+## Safety: rules in the prompt and in the code
+
+- **Prompt:** the bot must summarize a return and get the customer's explicit "yes" before creating it, and must answer policy questions only from `search_docs`.
+- **Code:** `create_return_request` checks the business rules itself (order exists, is delivered, is within 30 days, no duplicate). Even if the model is talked into calling the tool, invalid returns are rejected.
+
+## Example
 
 ```
-You: I want to return order 1003, the size is wrong
-  [tool] get_order_status({'order_id': '1003'})
-Claude: Order 1003 was delivered on October 20, 2026, so it's eligible for a return.
-        Order: 1003, Reason: Wrong size. Would you like me to submit this return?
-You: yes
-  [tool] create_return_request({'order_id': '1003', 'reason': 'Wrong size'})
-Claude: Your return for order 1003 is created. Your return ID is R-1003.
+You: Can I pay with Klarna?
+  [tool] search_docs({'query': 'Can I pay with Klarna?'})
+Claude: Yes, you can pay with Klarna. It's available as 4 interest-free installments on orders over $100.
+
+You: Where is my order 1001?
+  [tool] get_order_status({'order_id': '1001'})
+Claude: Your order 1001 has shipped with UPS.
+
+You: Can I send back sneakers I already wore?
+  [tool] search_docs({'query': 'Can I return shoes that I already wore?'})
+Claude: No, I'm afraid we can't accept returns of shoes that have been worn...
 ```
-
-## How `extract.py` works
-
-- Asks Claude to return the invoice data as JSON only.
-- Validates the reply with Pydantic models (`Invoice`, `LineItem`), so missing fields or wrong types are caught instead of silently passing through.
-- Checks that the line items add up to the stated total and marks each invoice as `OK`, `WARNING` (totals don't match) or `FAILED` (could not extract).
-- Can be imported by other modules: the batch processing only runs when the file is executed directly.
 
 ## Setup
 
 ```bash
-git clone https://github.com/toprakinc/claude-api-basics.git
-cd claude-api-basics
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project folder:
+Create a `.env` file:
 
 ```
-ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_key
+VOYAGE_API_KEY=your_key
 ```
 
-## Run
+Run:
 
 ```bash
-python main.py            # single message
-python chat.py            # support chatbot with tools (type "quit" to exit)
-python support_tools.py   # minimal tool calling example
-python extract.py         # process all invoices in invoices/
+python chat.py        # support bot
+python evaluate.py    # search quality test
 ```
 
-## Invoice Extraction API (FastAPI)
+Note: Voyage accounts without a payment method are limited to 3 requests per minute. `evaluate.py` embeds all questions in a single request to stay under the limit.
 
-The invoice extractor is also available as a web API, so other applications can send invoice text and receive structured JSON.
+## Limitations
 
-### Run the server
-
-```bash
-uvicorn app:app --reload
-```
-
-Interactive docs: http://127.0.0.1:8000/docs
-
-### Endpoints
-
-| Method | Path       | Description                                |
-| ------ | ---------- | ------------------------------------------ |
-| GET    | `/`        | Welcome message                            |
-| GET    | `/health`  | Health check, returns server status        |
-| POST   | `/extract` | Extracts structured data from invoice text |
-
-### Example request
-
-```bash
-curl -X POST http://127.0.0.1:8000/extract \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Bright Supplies Inc.\nItem: Printer paper (box) - qty 5 @ $12.00\nItem: Ink cartridge - qty 2 @ $35.50\nAmount due: $131.00"}'
-```
-
-### Example response (200)
-
-```json
-{
-  "vendor": "Bright Supplies Inc.",
-  "total": 131.0,
-  "currency": "USD",
-  "items": [
-    { "description": "Printer paper (box)", "quantity": 5, "unit_price": 12.0 },
-    { "description": "Ink cartridge", "quantity": 2, "unit_price": 35.5 }
-  ]
-}
-```
-
-### Errors
-
-- `422` with `"Could not extract invoice data"` when the text can't be parsed into a valid invoice.
-- `422` with validation details when the request body is not valid JSON or is missing `text`.
+- The store, orders and help center are fictional.
+- Section headings are listed by hand; a real project would detect them from the PDF's structure.
+- Vectors are kept in memory, which is fine for one small document but not for thousands.
+- The test set has 15 questions, enough to compare approaches but not to claim a precise accuracy.
