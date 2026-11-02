@@ -1,6 +1,14 @@
 import json
 from datetime import date
 
+from rag import (
+    HEADINGS,
+    chunk_by_headings,
+    embed_chunks,
+    load_pdf_text,
+    search_chunks_semantic,
+)
+
 # Fake order database (a real project would query a database or the store's API)
 ORDERS = {
     "1001": {"status": "shipped", "carrier": "UPS", "eta": "2026-10-29"},
@@ -13,6 +21,10 @@ RETURN_WINDOW_DAYS = 30
 
 # Return requests created while the program runs (a real project would save these)
 RETURNS = {}
+
+# Load the help center once at startup: split it into sections and embed them
+DOC_CHUNKS = chunk_by_headings(load_pdf_text("help_center.pdf"), HEADINGS)
+DOC_VECTORS = embed_chunks(DOC_CHUNKS)
 
 # Tool descriptions sent to Claude
 TOOLS = [
@@ -49,6 +61,25 @@ TOOLS = [
                 },
             },
             "required": ["order_id", "reason"],
+        },
+    },
+    {
+        "name": "search_docs",
+        "description": (
+            "Search the StepUp help center for store policies: shipping, returns, "
+            "refunds, exchanges, sizing, payment, shoe care and contact details. "
+            "Use this for general questions about how the store works. "
+            "Do not use it for a specific order; use get_order_status for that."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The customer's question, for example 'How long do refunds take?'",
+                }
+            },
+            "required": ["query"],
         },
     },
 ]
@@ -93,6 +124,12 @@ def create_return_request(order_id, reason):
     return {"return_id": return_id, "status": "created"}
 
 
+def search_docs(query):
+    """Find the help center sections most relevant to the question."""
+    sections = search_chunks_semantic(query, DOC_CHUNKS, DOC_VECTORS, k=3)
+    return {"sections": sections}
+
+
 def run_tools(content):
     """Run every tool Claude asked for and return the results in API format."""
     results = []
@@ -106,6 +143,8 @@ def run_tools(content):
                 result = create_return_request(
                     block.input["order_id"], block.input["reason"]
                 )
+            elif block.name == "search_docs":
+                result = search_docs(block.input["query"])
             else:
                 result = {"error": f"Unknown tool: {block.name}"}
             results.append(

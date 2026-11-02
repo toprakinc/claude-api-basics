@@ -23,10 +23,9 @@ Returns:
 - Remind the customer that shoes must be unworn.
 - If the return is rejected, explain the reason from the tool result.
 
-Store information:
-- Returns are accepted within 30 days if the shoes are unworn.
-- Shipping takes 2-4 business days.
-- Shipping is free for orders over $50.
+Store policies:
+- For any general question about the store (shipping, returns, exchanges, sizing, payment, shoe care, contact), use the search_docs tool and answer only from what it returns.
+- If search_docs doesn't contain the answer, say you don't know and suggest emailing support@stepup.example. Never make up a policy.
 """
 
 
