@@ -138,8 +138,12 @@ def search_chunks_semantic(question, chunks, chunk_vectors, k=3):
     return search_by_vector(question_vector, chunks, chunk_vectors, k)
 
 
-def answer_question(question, chunks):
-    top_chunks = search_chunks(question, chunks)
+def answer_question(
+    question,
+    chunks,
+    chunk_vectors,
+):
+    top_chunks = search_chunks_semantic(question, chunks, chunk_vectors)
 
     # Join the chunks into one text, with a blank line between them
     context = "\n\n".join(top_chunks)
@@ -166,6 +170,11 @@ Question: {question}"""
 if __name__ == "__main__":
     text = load_pdf_text("help_center.pdf")
     chunks = chunk_by_headings(text, HEADINGS)
-    for chunk in chunks:
-        print("---")
-        print(chunk)
+    chunk_vectors = embed_chunks(chunks)
+    print(
+        answer_question(
+            "How many days do I have to return shoes?", chunks, chunk_vectors
+        )
+    )
+    print("---")
+    print(answer_question("Do you sell watches?", chunks, chunk_vectors))
